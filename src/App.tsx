@@ -1,4 +1,4 @@
-import { useCallback, useRef, type DragEvent } from "react";
+import React, { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   ReactFlow,
   Background,
@@ -14,6 +14,7 @@ import { NODE_TYPES } from "./nodes";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { RightPanel } from "./components/RightPanel";
+import { NodeEditModal } from "./panels/NodeEditModal";
 import type { AnyNodeData, NodeType } from "./lib/types";
 
 const DEFAULT_NODE_DATA: Record<NodeType, () => Partial<AnyNodeData>> = {
@@ -24,11 +25,28 @@ const DEFAULT_NODE_DATA: Record<NodeType, () => Partial<AnyNodeData>> = {
   critic: () => ({ label: "Critic", nodeType: "critic" as const, config: { strategy: "fsdp", lr: 1e-5, ppo_mini_batch_size: 32, ppo_micro_batch_size_per_gpu: 4, ppo_epochs: 1, cliprange_value: 0.5 } }),
   rewardModel: () => ({ label: "Reward Model", nodeType: "rewardModel" as const, config: { enable: true, strategy: "fsdp" } }),
   customReward: () => ({ label: "Custom Reward", nodeType: "customReward" as const, config: { path: "", name: "compute_reward" } }),
+  agent: () => ({ label: "Agent", nodeType: "agent" as const, config: { framework: "langgraph", agent_class: "", max_steps: 10, tools: [] } }),
   algorithm: () => ({ label: "Algorithm", nodeType: "algorithm" as const, algorithm: "grpo", config: { adv_estimator: "grpo", gamma: 1.0, lam: 1.0, use_kl_in_reward: false, kl_penalty: "kl" } }),
   trainer: () => ({ label: "Trainer", nodeType: "trainer" as const, config: { total_epochs: 15, nnodes: 1, n_gpus_per_node: 8, save_freq: 5, test_freq: 5, val_before_train: true, resume_mode: "auto" } }),
   logger: () => ({ label: "Logger", nodeType: "logger" as const, loggers: ["console", "wandb"], projectName: "verl_examples", experimentName: "experiment" }),
   ray: () => ({ label: "Ray Cluster", nodeType: "ray" as const, config: { ray_init: {} } }),
   ssh: () => ({ label: "SSH Remote", nodeType: "ssh" as const, host: "", port: 22, username: "", authType: "agent", remoteWorkDir: "~/verl_runs", pythonCmd: "python3" }),
+};
+
+const MINIMAP_COLORS: Record<string, string> = {
+  model: "#6366f1",
+  dataset: "#10b981",
+  actor: "#f59e0b",
+  rollout: "#3b82f6",
+  critic: "#8b5cf6",
+  rewardModel: "#ec4899",
+  customReward: "#f43f5e",
+  agent: "#a855f7",
+  algorithm: "#ef4444",
+  trainer: "#14b8a6",
+  logger: "#f97316",
+  ray: "#06b6d4",
+  ssh: "#84cc16",
 };
 
 let idCounter = 1;
@@ -45,7 +63,10 @@ export default function App() {
   } = useFlowStore();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [reactFlowInstance, setReactFlowInstance] = React.useState<{ screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number } } | null>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<{
+    screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number };
+  } | null>(null);
+  const [modalNodeId, setModalNodeId] = useState<string | null>(null);
 
   const onDrop = useCallback(
     (event: DragEvent) => {
@@ -83,6 +104,14 @@ export default function App() {
     [setSelectedNodeId]
   );
 
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      setSelectedNodeId(node.id);
+      setModalNodeId(node.id);
+    },
+    [setSelectedNodeId]
+  );
+
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
   }, [setSelectedNodeId]);
@@ -105,6 +134,7 @@ export default function App() {
             onDrop={onDrop}
             onDragOver={onDragOver}
             onNodeClick={onNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick}
             onPaneClick={onPaneClick}
             nodeTypes={NODE_TYPES}
             onInit={setReactFlowInstance as (instance: unknown) => void}
@@ -122,22 +152,7 @@ export default function App() {
             />
             <Controls />
             <MiniMap
-              nodeColor={(node) => {
-                const colorMap: Record<string, string> = {
-                  model: "#6366f1",
-                  dataset: "#10b981",
-                  actor: "#f59e0b",
-                  rollout: "#3b82f6",
-                  critic: "#8b5cf6",
-                  rewardModel: "#ec4899",
-                  algorithm: "#ef4444",
-                  trainer: "#14b8a6",
-                  logger: "#f97316",
-                  ray: "#06b6d4",
-                  ssh: "#84cc16",
-                };
-                return colorMap[node.type ?? ""] ?? "#6b7280";
-              }}
+              nodeColor={(node) => MINIMAP_COLORS[node.type ?? ""] ?? "#6b7280"}
               style={{ background: "hsl(222 47% 11%)" }}
               maskColor="hsl(222 47% 9% / 70%)"
             />
@@ -146,9 +161,14 @@ export default function App() {
 
         <RightPanel />
       </div>
+
+      {/* Double-click node edit modal */}
+      {modalNodeId && (
+        <NodeEditModal
+          nodeId={modalNodeId}
+          onClose={() => setModalNodeId(null)}
+        />
+      )}
     </div>
   );
 }
-
-// Need React in scope for useState
-import React from "react";

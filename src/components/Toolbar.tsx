@@ -10,6 +10,7 @@ import {
   serializeYaml,
   validateConfig,
   launchLocalJob,
+  launchRemoteJob,
 } from "../lib/tauri";
 import { verlConfigToFlowNodes } from "../lib/configConverter";
 import type { AnyNodeData } from "../lib/types";
@@ -27,9 +28,10 @@ const ALGO_OPTIONS = [
 export function Toolbar() {
   const { nodes, algorithm, setAlgorithm, setNodes, setEdges, resetFlow } = useFlowStore();
   const { addJob, setActiveJobId } = useJobStore();
-  const { pythonCmd } = useConnectionStore();
+  const { pythonCmd, workingDir, sshProfiles, activeSshProfileId, setActiveSshProfile } = useConnectionStore();
   const [launching, setLaunching] = useState(false);
   const [exportStatus, setExportStatus] = useState<"idle" | "ok" | "err">("idle");
+  const [showSshMenu, setShowSshMenu] = useState(false);
 
   const handleOpen = async () => {
     const path = await open({
@@ -75,29 +77,34 @@ export function Toolbar() {
     await navigator.clipboard.writeText(yaml);
   };
 
-  const handleRun = async () => {
+  const getExperimentName = () => {
+    const trainerNode = nodes.find((n) => (n.data as AnyNodeData).nodeType === "trainer");
+    const trainerData = trainerNode?.data as { config?: { experiment_name?: string } } | undefined;
+    return trainerData?.config?.experiment_name;
+  };
+
+  const buildAndSaveConfig = async (dir: string): Promise<{ configPath: string; expName?: string }> => {
+    const config = flowNodesToVerlConfig(nodes as Node<AnyNodeData>[], algorithm);
+    const errors = await validateConfig(config);
+    const hardErrors = errors.filter((e) => e.severity === "error");
+    if (hardErrors.length > 0) {
+      throw new Error(`Validation errors:\n${hardErrors.map((e) => `• ${e.field}: ${e.message}`).join("\n")}`);
+    }
+    const configFile = `${algorithm}_trainer.yaml`;
+    const configPath = `${dir}/${configFile}`;
+    await saveYaml(config, configPath);
+    return { configPath, expName: getExperimentName() };
+  };
+
+  const handleRunLocally = async () => {
     setLaunching(true);
     try {
-      const config = flowNodesToVerlConfig(nodes as Node<AnyNodeData>[], algorithm);
-
-      const savePath = await save({
-        filters: [{ name: "YAML", extensions: ["yaml", "yml"] }],
-        defaultPath: `${algorithm}_trainer.yaml`,
-      });
-      if (!savePath) return;
-
-      await saveYaml(config, savePath);
-
-      const trainerNode = nodes.find((n) => (n.data as AnyNodeData).nodeType === "trainer");
-      const trainerData = trainerNode?.data as { config?: { experiment_name?: string } } | undefined;
-      const expName = trainerData?.config?.experiment_name;
-
-      const workDir = (savePath as string).split("/").slice(0, -1).join("/");
-      const configFile = (savePath as string).split("/").pop()!;
+      const effectiveDir = workingDir.replace(/^~/, (globalThis as Record<string, unknown>).HOME as string ?? "~");
+      const { configPath, expName } = await buildAndSaveConfig(effectiveDir);
 
       const jobId = await launchLocalJob({
-        configPath: configFile,
-        workingDir: workDir,
+        configPath,
+        workingDir: effectiveDir,
         pythonCmd,
         experimentName: expName,
       });
@@ -107,13 +114,61 @@ export function Toolbar() {
         name: expName ?? `job-${jobId.slice(0, 8)}`,
         status: "pending",
         created_at: new Date().toISOString(),
-        working_dir: workDir,
-        config_path: savePath as string,
+        working_dir: effectiveDir,
+        config_path: configPath,
         is_remote: false,
       });
       setActiveJobId(jobId);
     } catch (e) {
       console.error("Launch failed", e);
+      alert(String(e));
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  const handleRunOnSsh = async (profileId: string) => {
+    setShowSshMenu(false);
+    const profile = sshProfiles.find((p) => p.id === profileId);
+    if (!profile) return;
+    setActiveSshProfile(profileId);
+    setLaunching(true);
+    try {
+      const config = flowNodesToVerlConfig(nodes as Node<AnyNodeData>[], algorithm);
+      const configYaml = await serializeYaml(config);
+      const expName = getExperimentName();
+      const configName = `${algorithm}_trainer.yaml`;
+
+      const jobId = await launchRemoteJob({
+        host: profile.host,
+        port: profile.port,
+        username: profile.username,
+        auth: profile.authType === "key"
+          ? { type: "key", key_path: profile.keyPath ?? "" }
+          : profile.authType === "password"
+          ? { type: "password", password: "" }
+          : { type: "agent" },
+        remoteWorkDir: profile.remoteWorkDir,
+        pythonCmd: profile.pythonCmd,
+        configYaml,
+        configName,
+        experimentName: expName,
+      });
+
+      addJob({
+        id: jobId,
+        name: expName ?? `job-${jobId.slice(0, 8)}`,
+        status: "pending",
+        created_at: new Date().toISOString(),
+        working_dir: profile.remoteWorkDir,
+        config_path: `${profile.remoteWorkDir}/${configName}`,
+        is_remote: true,
+        remote_host: profile.host,
+      });
+      setActiveJobId(jobId);
+    } catch (e) {
+      console.error("Remote launch failed", e);
+      alert(String(e));
     } finally {
       setLaunching(false);
     }
@@ -184,9 +239,43 @@ export function Toolbar() {
 
       <div className="flex-1" />
 
-      {/* Run button */}
+      {/* SSH run dropdown */}
+      {sshProfiles.length > 0 && (
+        <div className="relative">
+          <button
+            onClick={() => setShowSshMenu((v) => !v)}
+            disabled={launching}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors disabled:opacity-50"
+          >
+            🔗 SSH
+            <span className="text-[10px] opacity-60">▾</span>
+          </button>
+          {showSshMenu && (
+            <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+              {sshProfiles.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleRunOnSsh(p.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary transition-colors text-left",
+                    activeSshProfileId === p.id && "text-primary"
+                  )}
+                >
+                  <span>🔗</span>
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{p.name || p.host}</div>
+                    <div className="text-[10px] text-muted-foreground">{p.username}@{p.host}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Run Locally button */}
       <button
-        onClick={handleRun}
+        onClick={handleRunLocally}
         disabled={launching}
         className={cn(
           "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",

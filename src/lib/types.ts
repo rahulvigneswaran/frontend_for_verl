@@ -1,5 +1,3 @@
-// Mirrors Rust VerlConfig structs for frontend use
-
 export type Algorithm = "ppo" | "grpo" | "dapo" | "rloo" | "reinforce_pp";
 
 export interface VerlConfig {
@@ -144,6 +142,17 @@ export interface RayConfig {
   [key: string]: unknown;
 }
 
+// Agent / LangGraph node config
+export interface AgentConfig {
+  framework?: string;
+  module_path?: string;
+  agent_class?: string;
+  max_steps?: number;
+  tools?: string[];
+  state_schema?: string;
+  env_vars?: Record<string, string>;
+}
+
 // Node data types for ReactFlow
 export type NodeType =
   | "model"
@@ -153,6 +162,7 @@ export type NodeType =
   | "critic"
   | "rewardModel"
   | "customReward"
+  | "agent"
   | "algorithm"
   | "trainer"
   | "logger"
@@ -165,64 +175,18 @@ export interface BaseNodeData {
   [key: string]: unknown;
 }
 
-export interface ModelNodeData extends BaseNodeData {
-  nodeType: "model";
-  config: ModelConfig;
-}
-
-export interface DatasetNodeData extends BaseNodeData {
-  nodeType: "dataset";
-  config: DataConfig;
-}
-
-export interface ActorNodeData extends BaseNodeData {
-  nodeType: "actor";
-  config: ActorConfig;
-}
-
-export interface RolloutNodeData extends BaseNodeData {
-  nodeType: "rollout";
-  config: RolloutConfig;
-}
-
-export interface CriticNodeData extends BaseNodeData {
-  nodeType: "critic";
-  config: CriticConfig;
-}
-
-export interface RewardModelNodeData extends BaseNodeData {
-  nodeType: "rewardModel";
-  config: RewardModelConfig;
-}
-
-export interface CustomRewardNodeData extends BaseNodeData {
-  nodeType: "customReward";
-  config: CustomRewardConfig;
-}
-
-export interface AlgorithmNodeData extends BaseNodeData {
-  nodeType: "algorithm";
-  algorithm: Algorithm;
-  config: AlgorithmConfig;
-}
-
-export interface TrainerNodeData extends BaseNodeData {
-  nodeType: "trainer";
-  config: TrainerConfig;
-}
-
-export interface LoggerNodeData extends BaseNodeData {
-  nodeType: "logger";
-  loggers: string[];
-  projectName: string;
-  experimentName: string;
-}
-
-export interface RayNodeData extends BaseNodeData {
-  nodeType: "ray";
-  config: RayConfig;
-}
-
+export interface ModelNodeData extends BaseNodeData { nodeType: "model"; config: ModelConfig }
+export interface DatasetNodeData extends BaseNodeData { nodeType: "dataset"; config: DataConfig }
+export interface ActorNodeData extends BaseNodeData { nodeType: "actor"; config: ActorConfig }
+export interface RolloutNodeData extends BaseNodeData { nodeType: "rollout"; config: RolloutConfig }
+export interface CriticNodeData extends BaseNodeData { nodeType: "critic"; config: CriticConfig }
+export interface RewardModelNodeData extends BaseNodeData { nodeType: "rewardModel"; config: RewardModelConfig }
+export interface CustomRewardNodeData extends BaseNodeData { nodeType: "customReward"; config: CustomRewardConfig }
+export interface AgentNodeData extends BaseNodeData { nodeType: "agent"; config: AgentConfig }
+export interface AlgorithmNodeData extends BaseNodeData { nodeType: "algorithm"; algorithm: Algorithm; config: AlgorithmConfig }
+export interface TrainerNodeData extends BaseNodeData { nodeType: "trainer"; config: TrainerConfig }
+export interface LoggerNodeData extends BaseNodeData { nodeType: "logger"; loggers: string[]; projectName: string; experimentName: string }
+export interface RayNodeData extends BaseNodeData { nodeType: "ray"; config: RayConfig }
 export interface SshNodeData extends BaseNodeData {
   nodeType: "ssh";
   host: string;
@@ -235,60 +199,19 @@ export interface SshNodeData extends BaseNodeData {
 }
 
 export type AnyNodeData =
-  | ModelNodeData
-  | DatasetNodeData
-  | ActorNodeData
-  | RolloutNodeData
-  | CriticNodeData
-  | RewardModelNodeData
-  | CustomRewardNodeData
-  | AlgorithmNodeData
-  | TrainerNodeData
-  | LoggerNodeData
-  | RayNodeData
-  | SshNodeData;
+  | ModelNodeData | DatasetNodeData | ActorNodeData | RolloutNodeData
+  | CriticNodeData | RewardModelNodeData | CustomRewardNodeData | AgentNodeData
+  | AlgorithmNodeData | TrainerNodeData | LoggerNodeData | RayNodeData | SshNodeData;
 
 // Job types
 export type JobStatus = "pending" | "running" | "done" | "failed" | "stopped";
-
 export interface Job {
-  id: string;
-  name: string;
-  status: JobStatus;
-  created_at: string;
-  started_at?: string;
-  finished_at?: string;
-  working_dir: string;
-  config_path: string;
-  is_remote: boolean;
-  remote_host?: string;
+  id: string; name: string; status: JobStatus;
+  created_at: string; started_at?: string; finished_at?: string;
+  working_dir: string; config_path: string;
+  is_remote: boolean; remote_host?: string;
 }
-
-export interface LogLine {
-  job_id: string;
-  line: string;
-  timestamp: string;
-  stream: "stdout" | "stderr";
-}
-
-export interface MetricsSnapshot {
-  job_id: string;
-  step: number;
-  epoch?: number;
-  metrics: Record<string, number>;
-  timestamp: string;
-}
-
-export interface ValidationError {
-  field: string;
-  message: string;
-  severity: "error" | "warning";
-}
-
-export interface Template {
-  id: string;
-  name: string;
-  description: string;
-  algorithm: Algorithm;
-  model: string;
-}
+export interface LogLine { job_id: string; line: string; timestamp: string; stream: "stdout" | "stderr" }
+export interface MetricsSnapshot { job_id: string; step: number; epoch?: number; metrics: Record<string, number>; timestamp: string }
+export interface ValidationError { field: string; message: string; severity: "error" | "warning" }
+export interface Template { id: string; name: string; description: string; algorithm: Algorithm; model: string }

@@ -15,6 +15,8 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: "rollout", label: "Rollout", icon: "⚡", color: "#3b82f6", description: "Inference engine" },
   { type: "critic", label: "Critic", icon: "🔍", color: "#8b5cf6", description: "Value function (PPO)" },
   { type: "rewardModel", label: "Reward Model", icon: "🏆", color: "#ec4899", description: "RM scoring" },
+  { type: "customReward", label: "Custom Reward", icon: "⚙️", color: "#f43f5e", description: "Python reward fn" },
+  { type: "agent", label: "Agent", icon: "🤖", color: "#a855f7", description: "LangGraph agent" },
   { type: "algorithm", label: "Algorithm", icon: "📐", color: "#ef4444", description: "RL algorithm" },
   { type: "trainer", label: "Trainer", icon: "🚂", color: "#14b8a6", description: "Training loop" },
   { type: "logger", label: "Logger", icon: "📈", color: "#f97316", description: "W&B / TensorBoard" },

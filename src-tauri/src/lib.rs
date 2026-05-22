@@ -27,6 +27,7 @@ pub fn run() {
             commands::config::list_templates,
             // Jobs
             commands::jobs::launch_local_job,
+            commands::jobs::launch_remote_job,
             commands::jobs::stop_job,
             commands::jobs::get_job_status,
             commands::jobs::list_jobs,

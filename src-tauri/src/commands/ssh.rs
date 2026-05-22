@@ -18,7 +18,7 @@ pub struct RemoteFile {
     pub size: u64,
 }
 
-fn connect_session(params: &SshParams) -> Result<ssh2::Session, String> {
+pub fn connect_session(params: &SshParams) -> Result<ssh2::Session, String> {
     let addr = format!("{}:{}", params.host, params.port);
     let tcp = TcpStream::connect(&addr)
         .map_err(|e| format!("TCP connect to {} failed: {}", addr, e))?;

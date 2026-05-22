@@ -2,14 +2,16 @@ import { useState } from "react";
 import { NodeInspector } from "../panels/NodeInspector";
 import { JobPanel } from "../panels/JobPanel";
 import { DashboardPanel } from "../panels/DashboardPanel";
+import { SettingsPanel } from "./SettingsPanel";
 import { cn } from "../lib/utils";
 
-type Tab = "inspector" | "jobs" | "dashboard";
+type Tab = "inspector" | "jobs" | "dashboard" | "settings";
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "inspector", label: "Inspector", icon: "◎" },
-  { id: "jobs", label: "Jobs", icon: "⬡" },
-  { id: "dashboard", label: "Metrics", icon: "⬡" },
+const TABS: { id: Tab; label: string }[] = [
+  { id: "inspector", label: "Inspector" },
+  { id: "jobs", label: "Jobs" },
+  { id: "dashboard", label: "Metrics" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function RightPanel() {
@@ -18,13 +20,13 @@ export function RightPanel() {
   return (
     <div className="flex flex-col h-full w-72 shrink-0 border-l border-border bg-card">
       {/* Tab bar */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border shrink-0">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "flex-1 py-2 text-xs font-medium transition-colors",
+              "flex-1 py-2 text-[10px] font-medium transition-colors",
               tab === t.id
                 ? "text-foreground border-b-2 border-primary"
                 : "text-muted-foreground hover:text-foreground"
@@ -40,6 +42,7 @@ export function RightPanel() {
         {tab === "inspector" && <NodeInspector />}
         {tab === "jobs" && <JobPanel />}
         {tab === "dashboard" && <DashboardPanel />}
+        {tab === "settings" && <SettingsPanel />}
       </div>
     </div>
   );

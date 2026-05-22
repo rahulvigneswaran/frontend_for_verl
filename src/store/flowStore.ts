@@ -27,13 +27,13 @@ interface FlowState {
   setAlgorithm: (algorithm: Algorithm) => void;
   setSelectedNodeId: (id: string | null) => void;
   updateNodeData: (nodeId: string, data: Partial<AnyNodeData>) => void;
+  deleteNode: (nodeId: string) => void;
   loadTemplate: (algorithm: Algorithm, modelPath?: string) => void;
   resetFlow: () => void;
 }
 
 const DEFAULT_ALGORITHM: Algorithm = "grpo";
 const DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct";
-
 const initialFlow = buildTemplate(DEFAULT_ALGORITHM, DEFAULT_MODEL);
 
 export const useFlowStore = create<FlowState>()(
@@ -52,20 +52,15 @@ export const useFlowStore = create<FlowState>()(
       })),
 
     onEdgesChange: (changes) =>
-      set((state) => ({
-        edges: applyEdgeChanges(changes, state.edges),
-      })),
+      set((state) => ({ edges: applyEdgeChanges(changes, state.edges) })),
 
     onConnect: (connection) =>
-      set((state) => ({
-        edges: addEdge({ ...connection, animated: false }, state.edges),
-      })),
+      set((state) => ({ edges: addEdge({ ...connection, animated: false }, state.edges) })),
 
     setAlgorithm: (algorithm) =>
       set((state) => {
         const modelNode = state.nodes.find((n) => n.data.nodeType === "model");
-        const modelPath =
-          (modelNode?.data as { config?: { path?: string } })?.config?.path ?? DEFAULT_MODEL;
+        const modelPath = (modelNode?.data as { config?: { path?: string } })?.config?.path ?? DEFAULT_MODEL;
         const flow = buildTemplate(algorithm, modelPath);
         return { algorithm, nodes: flow.nodes, edges: flow.edges };
       }),
@@ -75,10 +70,15 @@ export const useFlowStore = create<FlowState>()(
     updateNodeData: (nodeId, data) =>
       set((state) => ({
         nodes: state.nodes.map((node) =>
-          node.id === nodeId
-            ? { ...node, data: { ...node.data, ...data } as AnyNodeData }
-            : node
+          node.id === nodeId ? { ...node, data: { ...node.data, ...data } as AnyNodeData } : node
         ),
+      })),
+
+    deleteNode: (nodeId) =>
+      set((state) => ({
+        nodes: state.nodes.filter((n) => n.id !== nodeId),
+        edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+        selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
       })),
 
     loadTemplate: (algorithm, modelPath = DEFAULT_MODEL) => {
@@ -88,12 +88,7 @@ export const useFlowStore = create<FlowState>()(
 
     resetFlow: () => {
       const flow = buildTemplate(DEFAULT_ALGORITHM, DEFAULT_MODEL);
-      set({
-        algorithm: DEFAULT_ALGORITHM,
-        nodes: flow.nodes,
-        edges: flow.edges,
-        selectedNodeId: null,
-      });
+      set({ algorithm: DEFAULT_ALGORITHM, nodes: flow.nodes, edges: flow.edges, selectedNodeId: null });
     },
   }))
 );

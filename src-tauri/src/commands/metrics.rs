@@ -13,26 +13,6 @@ pub struct WandbRun {
     pub url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct WandbRunsResponse {
-    runs: Vec<WandbRunRaw>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct WandbRunRaw {
-    id: String,
-    name: String,
-    state: String,
-    project: WandbProject,
-    #[serde(rename = "createdAt")]
-    created_at: String,
-    url: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct WandbProject {
-    name: String,
-}
 
 #[tauri::command]
 pub async fn fetch_wandb_runs(

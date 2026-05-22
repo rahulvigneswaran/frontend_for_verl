@@ -38,6 +38,29 @@ export const launchLocalJob = (args: {
     experimentName: args.experimentName,
   });
 
+export const launchRemoteJob = (args: {
+  host: string;
+  port: number;
+  username: string;
+  auth: { type: "key"; key_path: string; passphrase?: string } | { type: "password"; password: string } | { type: "agent" };
+  remoteWorkDir: string;
+  pythonCmd: string;
+  configYaml: string;
+  configName: string;
+  experimentName?: string;
+}): Promise<string> =>
+  invoke("launch_remote_job", {
+    host: args.host,
+    port: args.port,
+    username: args.username,
+    auth: args.auth,
+    remoteWorkDir: args.remoteWorkDir,
+    pythonCmd: args.pythonCmd,
+    configYaml: args.configYaml,
+    configName: args.configName,
+    experimentName: args.experimentName,
+  });
+
 export const stopJob = (jobId: string): Promise<void> =>
   invoke("stop_job", { jobId });
 
