@@ -2,10 +2,15 @@ import { useState } from "react";
 import { NodePalette } from "./NodePalette";
 import { TemplateLibrary } from "./TemplateLibrary";
 import { cn } from "../lib/utils";
+import type { NodeType } from "../lib/types";
 
 type Tab = "nodes" | "templates";
 
-export function Sidebar() {
+interface SidebarProps {
+  onAddNode?: (type: NodeType) => void;
+}
+
+export function Sidebar({ onAddNode }: SidebarProps) {
   const [tab, setTab] = useState<Tab>("templates");
 
   return (
@@ -30,7 +35,7 @@ export function Sidebar() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === "nodes" && <NodePalette />}
+        {tab === "nodes" && <NodePalette onAddNode={onAddNode} />}
         {tab === "templates" && <TemplateLibrary />}
       </div>
     </div>

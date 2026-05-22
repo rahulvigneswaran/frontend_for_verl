@@ -1,7 +1,8 @@
 import type { DragEvent } from "react";
+import type { NodeType } from "../lib/types";
 
 interface PaletteItem {
-  type: string;
+  type: NodeType;
   label: string;
   icon: string;
   color: string;
@@ -24,7 +25,11 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: "ssh", label: "SSH Remote", icon: "🔗", color: "#84cc16", description: "Remote machine" },
 ];
 
-export function NodePalette() {
+interface NodePaletteProps {
+  onAddNode?: (type: NodeType) => void;
+}
+
+export function NodePalette({ onAddNode }: NodePaletteProps) {
   const onDragStart = (event: DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
@@ -32,8 +37,11 @@ export function NodePalette() {
 
   return (
     <div className="p-2">
-      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
+      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 px-1">
         Nodes
+      </div>
+      <div className="text-[9px] text-muted-foreground px-1 mb-2">
+        Drag to canvas or click to add
       </div>
       <div className="space-y-1">
         {PALETTE_ITEMS.map((item) => (
@@ -41,7 +49,8 @@ export function NodePalette() {
             key={item.type}
             draggable
             onDragStart={(e) => onDragStart(e, item.type)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-grab hover:bg-secondary transition-colors group"
+            onClick={() => onAddNode?.(item.type)}
+            className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-secondary transition-colors group select-none"
           >
             <span
               className="w-6 h-6 rounded flex items-center justify-center text-sm shrink-0"

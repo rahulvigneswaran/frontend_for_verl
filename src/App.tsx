@@ -9,7 +9,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useFlowStore } from "./store/flowStore";
+import { useFlowStore, isValidConnection } from "./store/flowStore";
 import { NODE_TYPES } from "./nodes";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
@@ -85,17 +85,31 @@ export default function App() {
   const {
     nodes, edges,
     onNodesChange, onEdgesChange, onConnect,
-    setSelectedNodeId, setNodes,
+    addNode, setSelectedNodeId,
   } = useFlowStore();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<{
     screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number };
+    getViewport: () => { x: number; y: number; zoom: number };
   } | null>(null);
   const [modalNodeId, setModalNodeId] = useState<string | null>(null);
 
   const left = usePanelResize(224);
   const right = usePanelResize(288);
+
+  const makeNode = useCallback(
+    (type: NodeType, position: { x: number; y: number }): Node<AnyNodeData> => {
+      const defaultData = DEFAULT_NODE_DATA[type]?.() ?? { label: type, nodeType: type };
+      return {
+        id: `${type}-dropped-${idCounter++}`,
+        type,
+        position,
+        data: defaultData as AnyNodeData,
+      };
+    },
+    []
+  );
 
   const onDrop = useCallback(
     (event: DragEvent) => {
@@ -103,22 +117,31 @@ export default function App() {
       const type = event.dataTransfer.getData("application/reactflow") as NodeType;
       if (!type || !reactFlowInstance) return;
       const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      const defaultData = DEFAULT_NODE_DATA[type]?.() ?? { label: type, nodeType: type };
-      const newNode: Node<AnyNodeData> = {
-        id: `${type}-dropped-${idCounter++}`,
-        type,
-        position,
-        data: defaultData as AnyNodeData,
-      };
-      setNodes([...nodes, newNode]);
+      addNode(makeNode(type, position));
     },
-    [reactFlowInstance, nodes, setNodes]
+    [reactFlowInstance, addNode, makeNode]
   );
 
   const onDragOver = useCallback((event: DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   }, []);
+
+  // Click-to-add: places node at current viewport center
+  const handleAddNode = useCallback(
+    (type: NodeType) => {
+      let position = { x: 400, y: 300 };
+      if (reactFlowInstance && reactFlowWrapper.current) {
+        const rect = reactFlowWrapper.current.getBoundingClientRect();
+        position = reactFlowInstance.screenToFlowPosition({
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        });
+      }
+      addNode(makeNode(type, position));
+    },
+    [reactFlowInstance, addNode, makeNode]
+  );
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => { setSelectedNodeId(node.id); },
@@ -140,7 +163,7 @@ export default function App() {
         {/* Left sidebar */}
         <div className="flex-none flex h-full" style={{ width: left.width }}>
           <div className="flex-1 min-w-0 h-full overflow-hidden">
-            <Sidebar />
+            <Sidebar onAddNode={handleAddNode} />
           </div>
           {/* Left resize handle */}
           <div
@@ -167,6 +190,7 @@ export default function App() {
             onPaneClick={onPaneClick}
             nodeTypes={NODE_TYPES}
             defaultEdgeOptions={EDGE_DEFAULTS}
+            isValidConnection={isValidConnection}
             onInit={setReactFlowInstance as (instance: unknown) => void}
             fitView
             fitViewOptions={{ padding: 0.1 }}

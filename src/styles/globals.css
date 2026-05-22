@@ -66,13 +66,8 @@
   border-radius: 8px;
 }
 
-.react-flow__edge-path {
-  stroke: hsl(var(--muted-foreground));
-  stroke-width: 2;
-}
-
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: hsl(var(--primary));
+  stroke: hsl(var(--primary)) !important;
 }
 
 /* Node base styles */

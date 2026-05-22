@@ -1,6 +1,7 @@
 import {
   applyNodeChanges,
   applyEdgeChanges,
+  MarkerType,
   type Node,
   type Edge,
   type NodeChange,
@@ -13,8 +14,18 @@ import { subscribeWithSelector } from "zustand/middleware";
 import type { Algorithm, AnyNodeData } from "../lib/types";
 import { buildTemplate } from "../lib/templates";
 import { EDGE_DEFAULTS } from "../lib/edgeDefaults";
+import { edgeColorFromHandle, portTypeFromHandle } from "../lib/portTypes";
 
 export { EDGE_DEFAULTS };
+
+export function isValidConnection(connection: Connection | Edge): boolean {
+  const src = "sourceHandle" in connection ? connection.sourceHandle : null;
+  const tgt = "targetHandle" in connection ? connection.targetHandle : null;
+  if (!src || !tgt) return false;
+  const srcType = portTypeFromHandle(src);
+  const tgtType = portTypeFromHandle(tgt);
+  return srcType !== null && tgtType !== null && srcType === tgtType;
+}
 
 interface FlowState {
   nodes: Node<AnyNodeData>[];
@@ -24,6 +35,7 @@ interface FlowState {
 
   setNodes: (nodes: Node<AnyNodeData>[]) => void;
   setEdges: (edges: Edge[]) => void;
+  addNode: (node: Node<AnyNodeData>) => void;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -49,6 +61,9 @@ export const useFlowStore = create<FlowState>()(
     setNodes: (nodes) => set({ nodes }),
     setEdges: (edges) => set({ edges }),
 
+    addNode: (node) =>
+      set((state) => ({ nodes: [...state.nodes, node] })),
+
     onNodesChange: (changes) =>
       set((state) => ({
         nodes: applyNodeChanges(changes, state.nodes) as Node<AnyNodeData>[],
@@ -58,7 +73,16 @@ export const useFlowStore = create<FlowState>()(
       set((state) => ({ edges: applyEdgeChanges(changes, state.edges) })),
 
     onConnect: (connection) =>
-      set((state) => ({ edges: addEdge({ ...connection, ...EDGE_DEFAULTS }, state.edges) })),
+      set((state) => {
+        const color = edgeColorFromHandle(connection.sourceHandle);
+        const edgeStyle: Partial<Edge> = {
+          animated: true,
+          type: "smoothstep",
+          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color },
+          style: { stroke: color, strokeWidth: 2 },
+        };
+        return { edges: addEdge({ ...connection, ...edgeStyle }, state.edges) };
+      }),
 
     setAlgorithm: (algorithm) =>
       set((state) => {

@@ -6,7 +6,7 @@ export function RayNode(props: NodeProps) {
   const data = props.data as RayNodeData;
   const { config } = data;
   return (
-    <BaseNode {...props} data={data} hasOutput={false}>
+    <BaseNode {...props} data={data}>
       <FieldRow
         label="address"
         value={config.ray_init?.address ?? "auto"}

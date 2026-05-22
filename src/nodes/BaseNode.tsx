@@ -2,6 +2,12 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { cn } from "../lib/utils";
 import type { AnyNodeData, NodeType } from "../lib/types";
 import { useFlowStore } from "../store/flowStore";
+import {
+  NODE_INPUT_PORTS,
+  NODE_OUTPUT_PORTS,
+  PORT_COLORS,
+  type PortDef,
+} from "../lib/portTypes";
 
 export const NODE_COLORS: Record<NodeType, string> = {
   model: "#6366f1",
@@ -35,26 +41,68 @@ const NODE_ICONS: Record<NodeType, string> = {
   ssh: "🔗",
 };
 
+// Fixed layout constants for deterministic handle positioning
+const HEADER_H = 43; // px: border-top 3px + py-2(8) + text-line(16) + py-2(8) + border(1) ≈ 43
+const PORT_ROW_H = 22; // px per port row
+
 interface BaseNodeProps extends NodeProps {
   data: AnyNodeData;
   children?: React.ReactNode;
-  hasInput?: boolean;
-  hasOutput?: boolean;
 }
 
-export function BaseNode({ data, selected, id, children, hasInput = true, hasOutput = true }: BaseNodeProps) {
+function PortHandle({
+  port,
+  kind,
+  index,
+}: {
+  port: PortDef;
+  kind: "input" | "output";
+  index: number;
+}) {
+  const topPx = HEADER_H + index * PORT_ROW_H + PORT_ROW_H / 2;
+  const color = PORT_COLORS[port.type];
+
+  return (
+    <Handle
+      id={port.id}
+      type={kind === "input" ? "target" : "source"}
+      position={kind === "input" ? Position.Left : Position.Right}
+      style={{
+        top: topPx,
+        background: color,
+        width: 10,
+        height: 10,
+        border: "2px solid hsl(222 47% 9%)",
+        borderRadius: "50%",
+      }}
+    />
+  );
+}
+
+export function BaseNode({ data, selected, id, children }: BaseNodeProps) {
   const color = NODE_COLORS[data.nodeType] ?? "#6b7280";
   const icon = NODE_ICONS[data.nodeType] ?? "◉";
   const { deleteNode, setSelectedNodeId } = useFlowStore();
+
+  const inputPorts = NODE_INPUT_PORTS[data.nodeType] ?? [];
+  const outputPorts = NODE_OUTPUT_PORTS[data.nodeType] ?? [];
+  const maxPorts = Math.max(inputPorts.length, outputPorts.length);
+  const portSectionH = maxPorts * PORT_ROW_H;
 
   return (
     <div
       className={cn("verl-node group", selected && "selected")}
       style={{ borderTop: `3px solid ${color}` }}
     >
-      {hasInput && (
-        <Handle type="target" position={Position.Left} style={{ background: color, width: 10, height: 10 }} />
-      )}
+      {/* Typed input handles */}
+      {inputPorts.map((port, i) => (
+        <PortHandle key={port.id} port={port} kind="input" index={i} />
+      ))}
+
+      {/* Typed output handles */}
+      {outputPorts.map((port, i) => (
+        <PortHandle key={port.id} port={port} kind="output" index={i} />
+      ))}
 
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-t-lg" style={{ background: `${color}18` }}>
@@ -64,7 +112,6 @@ export function BaseNode({ data, selected, id, children, hasInput = true, hasOut
           {data.nodeType}
         </span>
 
-        {/* Edit + Delete buttons — visible on hover */}
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
           <button
             title="Edit (or double-click)"
@@ -83,13 +130,53 @@ export function BaseNode({ data, selected, id, children, hasInput = true, hasOut
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-2 text-xs text-muted-foreground space-y-1">
-        {children}
-      </div>
+      {/* Port labels section */}
+      {maxPorts > 0 && (
+        <div className="relative border-b border-border/40" style={{ height: portSectionH }}>
+          {inputPorts.map((port, i) => (
+            <div
+              key={port.id}
+              className="absolute left-3 flex items-center gap-1.5"
+              style={{
+                top: i * PORT_ROW_H,
+                height: PORT_ROW_H,
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ background: PORT_COLORS[port.type] }}
+              />
+              <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: PORT_COLORS[port.type] }}>
+                {port.label}
+              </span>
+            </div>
+          ))}
+          {outputPorts.map((port, i) => (
+            <div
+              key={port.id}
+              className="absolute right-3 flex items-center gap-1.5"
+              style={{
+                top: i * PORT_ROW_H,
+                height: PORT_ROW_H,
+              }}
+            >
+              <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: PORT_COLORS[port.type] }}>
+                {port.label}
+              </span>
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ background: PORT_COLORS[port.type] }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
-      {hasOutput && (
-        <Handle type="source" position={Position.Right} style={{ background: color, width: 10, height: 10 }} />
+      {/* Content */}
+      {children && (
+        <div className="px-3 py-2 text-xs text-muted-foreground space-y-1">
+          {children}
+        </div>
       )}
     </div>
   );

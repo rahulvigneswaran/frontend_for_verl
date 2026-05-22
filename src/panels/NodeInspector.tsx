@@ -30,9 +30,9 @@ export function Field({
         <label className="text-xs text-muted-foreground">{label}</label>
         <button
           onClick={() => onChange(!value)}
-          className={`relative w-8 h-4 rounded-full transition-colors ${value ? "bg-primary" : "bg-secondary border border-border"}`}
+          className={`relative w-9 h-5 rounded-full transition-colors duration-150 ${value ? "bg-primary" : "bg-muted border border-border"}`}
         >
-          <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-foreground transition-transform ${value ? "translate-x-4" : "translate-x-0.5"}`} />
+          <span className={`absolute top-[3px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform duration-150 ${value ? "translate-x-[18px]" : "translate-x-[3px]"}`} />
         </button>
       </div>
     );

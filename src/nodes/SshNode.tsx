@@ -5,7 +5,7 @@ import type { SshNodeData } from "../lib/types";
 export function SshNode(props: NodeProps) {
   const data = props.data as SshNodeData;
   return (
-    <BaseNode {...props} data={data} hasInput={false}>
+    <BaseNode {...props} data={data}>
       <FieldRow label="host" value={`${data.host}:${data.port}`} />
       <FieldRow label="user" value={data.username} />
       <FieldRow label="auth" value={data.authType} />

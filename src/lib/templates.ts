@@ -1,9 +1,31 @@
-import type { Node, Edge } from "@xyflow/react";
+import { MarkerType, type Node, type Edge } from "@xyflow/react";
 import type { AnyNodeData, Algorithm } from "./types";
-import { EDGE_DEFAULTS } from "./edgeDefaults";
+import { PORT_COLORS, type PortType } from "./portTypes";
 
-function e(id: string, source: string, target: string): Edge {
-  return { id, source, target, ...EDGE_DEFAULTS };
+function edgeColor(sourceHandle: string): string {
+  const portType = sourceHandle.replace("out-", "") as PortType;
+  return PORT_COLORS[portType] ?? "#64748b";
+}
+
+function e(
+  id: string,
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string
+): Edge {
+  const color = sourceHandle ? edgeColor(sourceHandle) : "#64748b";
+  return {
+    id,
+    source,
+    target,
+    ...(sourceHandle ? { sourceHandle } : {}),
+    ...(targetHandle ? { targetHandle } : {}),
+    animated: true,
+    type: "smoothstep",
+    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color },
+    style: { stroke: color, strokeWidth: 2 },
+  };
 }
 
 interface FlowTemplate {
@@ -191,14 +213,16 @@ export function buildTemplate(
   }
 
   const edges: Edge[] = [
-    e("e-dataset-actor", "dataset", "actor"),
-    e("e-model-actor", "model", "actor"),
-    e("e-actor-rollout", "actor", "rollout"),
-    e("e-rollout-algorithm", "rollout", "algorithm"),
-    e("e-algorithm-trainer", "algorithm", "trainer"),
-    e("e-logger-trainer", "logger", "trainer"),
-    e("e-trainer-ray", "trainer", "ray"),
-    ...(algorithm === "ppo" ? [e("e-critic", "actor", "critic")] : []),
+    e("e-dataset-actor", "dataset", "actor", "out-training_data", "in-training_data"),
+    e("e-model-actor", "model", "actor", "out-model_weights", "in-model_weights"),
+    e("e-actor-rollout", "actor", "rollout", "out-actor_setup", "in-actor_setup"),
+    e("e-rollout-algorithm", "rollout", "algorithm", "out-rollout_output", "in-rollout_output"),
+    e("e-algorithm-trainer", "algorithm", "trainer", "out-algorithm_updates", "in-algorithm_updates"),
+    e("e-logger-trainer", "logger", "trainer", "out-log_config", "in-log_config"),
+    e("e-trainer-ray", "trainer", "ray", "out-training_job", "in-training_job"),
+    ...(algorithm === "ppo"
+      ? [e("e-critic", "actor", "critic", "out-actor_setup", "in-actor_setup")]
+      : []),
   ];
 
   return { nodes, edges };
@@ -238,8 +262,8 @@ export function buildAgentTemplate(
   const nodes = [...shifted, agentNode];
   const edges: Edge[] = [
     ...base.edges.filter((e) => e.id !== "e-rollout-algorithm"),
-    e("e-rollout-agent", "rollout", "agent"),
-    e("e-agent-algorithm", "agent", "algorithm"),
+    e("e-rollout-agent", "rollout", "agent", "out-rollout_output", "in-rollout_output"),
+    e("e-agent-algorithm", "agent", "algorithm", "out-agent_trajectory", "in-agent_trajectory"),
   ];
 
   return { nodes, edges };

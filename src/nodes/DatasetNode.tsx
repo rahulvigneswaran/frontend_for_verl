@@ -6,7 +6,7 @@ export function DatasetNode(props: NodeProps) {
   const data = props.data as DatasetNodeData;
   const { config } = data;
   return (
-    <BaseNode {...props} data={data} hasInput={false}>
+    <BaseNode {...props} data={data}>
       <FieldRow label="train batch" value={config.train_batch_size ?? "—"} />
       <FieldRow label="max prompt len" value={config.max_prompt_length ?? "—"} />
       <FieldRow label="max resp len" value={config.max_response_length ?? "—"} />
