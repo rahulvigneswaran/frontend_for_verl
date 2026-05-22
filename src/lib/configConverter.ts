@@ -85,6 +85,23 @@ export function flowNodesToVerlConfig(
         break;
       }
 
+      case "agent": {
+        // Maps to actor_rollout_ref.rollout.multi_turn for verl's agentic harness
+        if (!config.actor_rollout_ref) config.actor_rollout_ref = {};
+        if (!config.actor_rollout_ref.rollout) config.actor_rollout_ref.rollout = {};
+        config.actor_rollout_ref.rollout.multi_turn = {
+          enable: true,
+          max_turns: data.config.max_steps ?? 10,
+          ...(data.config.agent_class ? { agent_class: data.config.agent_class } : {}),
+          ...(data.config.module_path ? { module_path: data.config.module_path } : {}),
+          ...(data.config.tools?.length ? { tools: data.config.tools } : {}),
+          ...(data.config.state_schema ? { state_schema: data.config.state_schema } : {}),
+          ...(data.config.env_vars ? { env_vars: data.config.env_vars } : {}),
+          framework: data.config.framework ?? "langgraph",
+        };
+        break;
+      }
+
       case "ray": {
         config.ray_kwargs = data.config;
         break;
@@ -144,6 +161,9 @@ export function verlConfigToFlowNodes(
   }
 
   if (config.actor_rollout_ref?.rollout) {
+    const rollout = config.actor_rollout_ref.rollout;
+    const multiTurn = rollout.multi_turn as Record<string, unknown> | undefined;
+
     nodes.push({
       id: makeId("rollout"),
       type: "rollout",
@@ -151,10 +171,31 @@ export function verlConfigToFlowNodes(
       data: {
         label: "Rollout Engine",
         nodeType: "rollout",
-        config: config.actor_rollout_ref.rollout,
+        config: rollout,
       },
     });
     x += xStep;
+
+    if (multiTurn?.enable) {
+      nodes.push({
+        id: makeId("agent"),
+        type: "agent",
+        position: { x, y },
+        data: {
+          label: "Agent",
+          nodeType: "agent",
+          config: {
+            framework: (multiTurn.framework as string) ?? "langgraph",
+            agent_class: multiTurn.agent_class as string | undefined,
+            module_path: multiTurn.module_path as string | undefined,
+            max_steps: (multiTurn.max_turns as number) ?? 10,
+            tools: (multiTurn.tools as string[]) ?? [],
+            state_schema: multiTurn.state_schema as string | undefined,
+          },
+        },
+      });
+      x += xStep;
+    }
   }
 
   if (config.critic && algorithm === "ppo") {

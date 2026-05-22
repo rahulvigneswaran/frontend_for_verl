@@ -1,6 +1,7 @@
+import type { Node } from "@xyflow/react";
 import { TEMPLATES } from "../lib/templates";
 import { useFlowStore } from "../store/flowStore";
-import type { Algorithm } from "../lib/types";
+import type { Algorithm, AnyNodeData } from "../lib/types";
 
 const ALGO_BADGE_COLORS: Record<Algorithm, string> = {
   ppo: "bg-yellow-500/20 text-yellow-400",
@@ -11,7 +12,7 @@ const ALGO_BADGE_COLORS: Record<Algorithm, string> = {
 };
 
 export function TemplateLibrary() {
-  const { loadTemplate } = useFlowStore();
+  const { setNodes, setEdges, setAlgorithm, setSelectedNodeId } = useFlowStore();
 
   return (
     <div className="p-2">
@@ -22,7 +23,12 @@ export function TemplateLibrary() {
         {TEMPLATES.map((t) => (
           <button
             key={t.id}
-            onClick={() => loadTemplate(t.algorithm, t.model)}
+            onClick={() => {
+              setAlgorithm(t.algorithm);
+              setNodes(t.nodes as Node<AnyNodeData>[]);
+              setEdges(t.edges);
+              setSelectedNodeId(null);
+            }}
             className="w-full text-left px-2 py-2 rounded-lg hover:bg-secondary transition-colors"
           >
             <div className="flex items-center gap-1.5 mb-0.5">

@@ -204,6 +204,47 @@ export function buildTemplate(
   return { nodes, edges };
 }
 
+export function buildAgentTemplate(
+  modelPath: string
+): { nodes: Node<AnyNodeData>[]; edges: Edge[] } {
+  const base = buildTemplate("grpo", modelPath);
+
+  const agentNode: Node<AnyNodeData> = {
+    id: "agent",
+    type: "agent",
+    position: { x: 920, y: 280 },
+    data: {
+      label: "Agent",
+      nodeType: "agent",
+      config: {
+        framework: "langgraph",
+        agent_class: "my_project.agents.ReasoningAgent",
+        module_path: "",
+        max_steps: 10,
+        tools: ["search", "calculator"],
+        state_schema: "",
+      },
+    },
+  };
+
+  // Shift algorithm + trainer + logger + ray rightward to make room
+  const shifted = base.nodes.map((n) => {
+    if (["algorithm", "trainer", "logger", "ray"].includes(n.id)) {
+      return { ...n, position: { x: n.position.x + 280, y: n.position.y } };
+    }
+    return n;
+  });
+
+  const nodes = [...shifted, agentNode];
+  const edges: Edge[] = [
+    ...base.edges.filter((e) => e.id !== "e-rollout-algorithm"),
+    e("e-rollout-agent", "rollout", "agent"),
+    e("e-agent-algorithm", "agent", "algorithm"),
+  ];
+
+  return { nodes, edges };
+}
+
 export const TEMPLATES: FlowTemplate[] = [
   {
     id: "qwen25_7b_ppo",
@@ -244,5 +285,13 @@ export const TEMPLATES: FlowTemplate[] = [
     algorithm: "dapo",
     model: "Qwen/Qwen2.5-7B-Instruct",
     ...buildTemplate("dapo", "Qwen/Qwen2.5-7B-Instruct"),
+  },
+  {
+    id: "qwen25_7b_agent_grpo",
+    name: "Qwen2.5-7B Agent GRPO",
+    description: "GRPO with LangGraph agentic harness in the rollout loop",
+    algorithm: "grpo",
+    model: "Qwen/Qwen2.5-7B-Instruct",
+    ...buildAgentTemplate("Qwen/Qwen2.5-7B-Instruct"),
   },
 ];
