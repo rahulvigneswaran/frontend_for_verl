@@ -42,8 +42,6 @@
     "shell": {
       "open": true
     },
-    "fs": {
-      "scope": ["**"]
-    }
+    "fs": {}
   }
 }
