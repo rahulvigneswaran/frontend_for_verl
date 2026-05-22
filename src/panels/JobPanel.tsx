@@ -99,22 +99,25 @@ export function JobPanel() {
   const { jobs, activeJobId, appendLog, updateJob, setActiveJobId } = useJobStore();
 
   useEffect(() => {
-    const unlisten1 = listen<LogLine>("job:log", (event) => {
-      appendLog(event.payload);
-    });
+    let unlisten1: (() => void) | null = null;
+    let unlisten2: (() => void) | null = null;
 
-    const unlisten2 = listen<{ job_id: string; status: string }>(
+    listen<LogLine>("job:log", (event) => {
+      appendLog(event.payload);
+    }).then((f) => { unlisten1 = f; }).catch(() => {});
+
+    listen<{ job_id: string; status: string }>(
       "job:status",
       (event) => {
         updateJob(event.payload.job_id, {
           status: event.payload.status as Job["status"],
         });
       }
-    );
+    ).then((f) => { unlisten2 = f; }).catch(() => {});
 
     return () => {
-      unlisten1.then((f) => f());
-      unlisten2.then((f) => f());
+      unlisten1?.();
+      unlisten2?.();
     };
   }, [appendLog, updateJob]);
 
