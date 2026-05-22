@@ -42,10 +42,8 @@
     "shell": {
       "open": true
     },
-    "dialog": {},
     "fs": {
       "scope": ["**"]
-    },
-    "store": {}
+    }
   }
 }
