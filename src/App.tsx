@@ -15,6 +15,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { RightPanel } from "./components/RightPanel";
 import { NodeEditModal } from "./panels/NodeEditModal";
+import { EDGE_DEFAULTS } from "./lib/edgeDefaults";
 import type { AnyNodeData, NodeType } from "./lib/types";
 
 const DEFAULT_NODE_DATA: Record<NodeType, () => Partial<AnyNodeData>> = {
@@ -34,32 +35,57 @@ const DEFAULT_NODE_DATA: Record<NodeType, () => Partial<AnyNodeData>> = {
 };
 
 const MINIMAP_COLORS: Record<string, string> = {
-  model: "#6366f1",
-  dataset: "#10b981",
-  actor: "#f59e0b",
-  rollout: "#3b82f6",
-  critic: "#8b5cf6",
-  rewardModel: "#ec4899",
-  customReward: "#f43f5e",
-  agent: "#a855f7",
-  algorithm: "#ef4444",
-  trainer: "#14b8a6",
-  logger: "#f97316",
-  ray: "#06b6d4",
-  ssh: "#84cc16",
+  model: "#6366f1", dataset: "#10b981", actor: "#f59e0b", rollout: "#3b82f6",
+  critic: "#8b5cf6", rewardModel: "#ec4899", customReward: "#f43f5e",
+  agent: "#a855f7", algorithm: "#ef4444", trainer: "#14b8a6",
+  logger: "#f97316", ray: "#06b6d4", ssh: "#84cc16",
 };
+
+const MIN_PANEL = 160;
+const MAX_PANEL = 520;
 
 let idCounter = 1;
 
+function usePanelResize(initial: number) {
+  const [width, setWidth] = useState(initial);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startW = useRef(0);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent, direction: "right" | "left") => {
+      e.preventDefault();
+      dragging.current = true;
+      startX.current = e.clientX;
+      startW.current = width;
+
+      const onMove = (ev: MouseEvent) => {
+        if (!dragging.current) return;
+        const delta = ev.clientX - startX.current;
+        const next = direction === "right"
+          ? Math.min(MAX_PANEL, Math.max(MIN_PANEL, startW.current + delta))
+          : Math.min(MAX_PANEL, Math.max(MIN_PANEL, startW.current - delta));
+        setWidth(next);
+      };
+      const onUp = () => {
+        dragging.current = false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [width]
+  );
+
+  return { width, onMouseDown };
+}
+
 export default function App() {
   const {
-    nodes,
-    edges,
-    onNodesChange,
-    onEdgesChange,
-    onConnect,
-    setSelectedNodeId,
-    setNodes,
+    nodes, edges,
+    onNodesChange, onEdgesChange, onConnect,
+    setSelectedNodeId, setNodes,
   } = useFlowStore();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -68,17 +94,15 @@ export default function App() {
   } | null>(null);
   const [modalNodeId, setModalNodeId] = useState<string | null>(null);
 
+  const left = usePanelResize(224);
+  const right = usePanelResize(288);
+
   const onDrop = useCallback(
     (event: DragEvent) => {
       event.preventDefault();
       const type = event.dataTransfer.getData("application/reactflow") as NodeType;
       if (!type || !reactFlowInstance) return;
-
-      const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
+      const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const defaultData = DEFAULT_NODE_DATA[type]?.() ?? { label: type, nodeType: type };
       const newNode: Node<AnyNodeData> = {
         id: `${type}-dropped-${idCounter++}`,
@@ -86,7 +110,6 @@ export default function App() {
         position,
         data: defaultData as AnyNodeData,
       };
-
       setNodes([...nodes, newNode]);
     },
     [reactFlowInstance, nodes, setNodes]
@@ -98,30 +121,36 @@ export default function App() {
   }, []);
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      setSelectedNodeId(node.id);
-    },
+    (_: React.MouseEvent, node: Node) => { setSelectedNodeId(node.id); },
     [setSelectedNodeId]
   );
 
   const onNodeDoubleClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      setSelectedNodeId(node.id);
-      setModalNodeId(node.id);
-    },
+    (_: React.MouseEvent, node: Node) => { setSelectedNodeId(node.id); setModalNodeId(node.id); },
     [setSelectedNodeId]
   );
 
-  const onPaneClick = useCallback(() => {
-    setSelectedNodeId(null);
-  }, [setSelectedNodeId]);
+  const onPaneClick = useCallback(() => { setSelectedNodeId(null); }, [setSelectedNodeId]);
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       <Toolbar />
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        {/* Left sidebar */}
+        <div className="flex-none flex h-full" style={{ width: left.width }}>
+          <div className="flex-1 min-w-0 h-full overflow-hidden">
+            <Sidebar />
+          </div>
+          {/* Left resize handle */}
+          <div
+            className="w-1 h-full cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors group relative shrink-0"
+            onMouseDown={(e) => left.onMouseDown(e, "right")}
+            title="Drag to resize"
+          >
+            <div className="absolute inset-y-0 left-0 w-px bg-border group-hover:bg-primary/50 transition-colors" />
+          </div>
+        </div>
 
         {/* ReactFlow canvas */}
         <div className="flex-1 min-w-0" ref={reactFlowWrapper}>
@@ -137,6 +166,7 @@ export default function App() {
             onNodeDoubleClick={onNodeDoubleClick}
             onPaneClick={onPaneClick}
             nodeTypes={NODE_TYPES}
+            defaultEdgeOptions={EDGE_DEFAULTS}
             onInit={setReactFlowInstance as (instance: unknown) => void}
             fitView
             fitViewOptions={{ padding: 0.1 }}
@@ -144,12 +174,7 @@ export default function App() {
             maxZoom={2}
             deleteKeyCode="Delete"
           >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={24}
-              size={1}
-              color="hsl(222 47% 18%)"
-            />
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="hsl(222 47% 18%)" />
             <Controls />
             <MiniMap
               nodeColor={(node) => MINIMAP_COLORS[node.type ?? ""] ?? "#6b7280"}
@@ -159,15 +184,23 @@ export default function App() {
           </ReactFlow>
         </div>
 
-        <RightPanel />
+        {/* Right resize handle */}
+        <div
+          className="w-1 h-full cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors group relative shrink-0"
+          onMouseDown={(e) => right.onMouseDown(e, "left")}
+          title="Drag to resize"
+        >
+          <div className="absolute inset-y-0 right-0 w-px bg-border group-hover:bg-primary/50 transition-colors" />
+        </div>
+
+        {/* Right panel */}
+        <div className="flex-none h-full" style={{ width: right.width }}>
+          <RightPanel />
+        </div>
       </div>
 
-      {/* Double-click node edit modal */}
       {modalNodeId && (
-        <NodeEditModal
-          nodeId={modalNodeId}
-          onClose={() => setModalNodeId(null)}
-        />
+        <NodeEditModal nodeId={modalNodeId} onClose={() => setModalNodeId(null)} />
       )}
     </div>
   );

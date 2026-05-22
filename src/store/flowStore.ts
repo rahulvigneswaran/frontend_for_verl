@@ -12,6 +12,9 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type { Algorithm, AnyNodeData } from "../lib/types";
 import { buildTemplate } from "../lib/templates";
+import { EDGE_DEFAULTS } from "../lib/edgeDefaults";
+
+export { EDGE_DEFAULTS };
 
 interface FlowState {
   nodes: Node<AnyNodeData>[];
@@ -55,7 +58,7 @@ export const useFlowStore = create<FlowState>()(
       set((state) => ({ edges: applyEdgeChanges(changes, state.edges) })),
 
     onConnect: (connection) =>
-      set((state) => ({ edges: addEdge({ ...connection, animated: false }, state.edges) })),
+      set((state) => ({ edges: addEdge({ ...connection, ...EDGE_DEFAULTS }, state.edges) })),
 
     setAlgorithm: (algorithm) =>
       set((state) => {

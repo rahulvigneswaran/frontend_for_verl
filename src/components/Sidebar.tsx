@@ -9,7 +9,7 @@ export function Sidebar() {
   const [tab, setTab] = useState<Tab>("templates");
 
   return (
-    <div className="flex flex-col h-full w-56 shrink-0 border-r border-border bg-card">
+    <div className="flex flex-col h-full w-full border-r border-border bg-card">
       {/* Tab bar */}
       <div className="flex border-b border-border">
         {(["templates", "nodes"] as Tab[]).map((t) => (

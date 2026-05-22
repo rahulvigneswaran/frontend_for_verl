@@ -1,5 +1,10 @@
 import type { Node, Edge } from "@xyflow/react";
 import type { AnyNodeData, Algorithm } from "./types";
+import { EDGE_DEFAULTS } from "./edgeDefaults";
+
+function e(id: string, source: string, target: string): Edge {
+  return { id, source, target, ...EDGE_DEFAULTS };
+}
 
 interface FlowTemplate {
   id: string;
@@ -186,16 +191,14 @@ export function buildTemplate(
   }
 
   const edges: Edge[] = [
-    { id: "e-dataset-model", source: "dataset", target: "actor", animated: false },
-    { id: "e-model-actor", source: "model", target: "actor" },
-    { id: "e-actor-rollout", source: "actor", target: "rollout" },
-    { id: "e-rollout-algorithm", source: "rollout", target: "algorithm" },
-    { id: "e-algorithm-trainer", source: "algorithm", target: "trainer" },
-    { id: "e-logger-trainer", source: "logger", target: "trainer" },
-    { id: "e-trainer-ray", source: "trainer", target: "ray" },
-    ...(algorithm === "ppo"
-      ? [{ id: "e-critic", source: "actor", target: "critic" }]
-      : []),
+    e("e-dataset-actor", "dataset", "actor"),
+    e("e-model-actor", "model", "actor"),
+    e("e-actor-rollout", "actor", "rollout"),
+    e("e-rollout-algorithm", "rollout", "algorithm"),
+    e("e-algorithm-trainer", "algorithm", "trainer"),
+    e("e-logger-trainer", "logger", "trainer"),
+    e("e-trainer-ray", "trainer", "ray"),
+    ...(algorithm === "ppo" ? [e("e-critic", "actor", "critic")] : []),
   ];
 
   return { nodes, edges };

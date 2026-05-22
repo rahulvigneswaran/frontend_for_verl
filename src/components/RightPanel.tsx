@@ -18,7 +18,7 @@ export function RightPanel() {
   const [tab, setTab] = useState<Tab>("inspector");
 
   return (
-    <div className="flex flex-col h-full w-72 shrink-0 border-l border-border bg-card">
+    <div className="flex flex-col h-full w-full border-l border-border bg-card">
       {/* Tab bar */}
       <div className="flex border-b border-border shrink-0">
         {TABS.map((t) => (
