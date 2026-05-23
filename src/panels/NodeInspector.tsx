@@ -185,8 +185,35 @@ export function ModelInspector({ data, update }: { data: ModelNodeData; update: 
 export function DatasetInspector({ data, update }: { data: DatasetNodeData; update: (d: Partial<DatasetNodeData>) => void }) {
   const c = data.config;
   const u = (k: string, v: unknown) => update({ config: { ...c, [k]: v } });
+  const source = c.source ?? "local";
+
   return (
     <>
+      <Section title="Source">
+        <div className="flex gap-1 py-0.5">
+          {(["local", "huggingface"] as const).map((s) => (
+            <button key={s} onClick={() => u("source", s)}
+              className={cn("flex-1 py-1 rounded text-xs font-medium transition-colors",
+                source === s ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground")}
+            >{s === "local" ? "Local Parquet" : "HuggingFace Hub"}</button>
+          ))}
+        </div>
+      </Section>
+
+      {source === "huggingface" ? (
+        <Section title="HuggingFace Dataset">
+          <Field label="Dataset ID" value={c.hf_dataset} onChange={(v) => u("hf_dataset", v)} placeholder="openai/gsm8k" />
+          <Field label="Subset / config" value={c.hf_subset} onChange={(v) => u("hf_subset", v)} placeholder="main (optional)" />
+          <Field label="Train split" value={c.hf_train_split ?? "train"} onChange={(v) => u("hf_train_split", v)} placeholder="train" />
+          <Field label="Val split" value={c.hf_val_split ?? "test"} onChange={(v) => u("hf_val_split", v)} placeholder="test" />
+        </Section>
+      ) : (
+        <Section title="Files">
+          <Field label="Train files (comma-sep)" value={c.train_files?.join(", ")} onChange={(v) => u("train_files", String(v).split(",").map((s) => s.trim()).filter(Boolean))} />
+          <Field label="Val files (comma-sep)" value={c.val_files?.join(", ")} onChange={(v) => u("val_files", String(v).split(",").map((s) => s.trim()).filter(Boolean))} />
+        </Section>
+      )}
+
       <Section title="Batching">
         <Field label="Train batch size" value={c.train_batch_size} onChange={(v) => u("train_batch_size", v)} type="number" min={1} />
         <Field label="Val batch size" value={c.val_batch_size} onChange={(v) => u("val_batch_size", v)} type="number" min={1} />
@@ -196,10 +223,6 @@ export function DatasetInspector({ data, update }: { data: DatasetNodeData; upda
       <Section title="Schema">
         <Field label="Prompt key" value={c.prompt_key} onChange={(v) => u("prompt_key", v)} placeholder="prompt" />
         <Field label="Response key" value={c.response_key} onChange={(v) => u("response_key", v)} placeholder="response" />
-      </Section>
-      <Section title="Files">
-        <Field label="Train files (comma-sep)" value={c.train_files?.join(", ")} onChange={(v) => u("train_files", String(v).split(",").map((s) => s.trim()).filter(Boolean))} />
-        <Field label="Val files (comma-sep)" value={c.val_files?.join(", ")} onChange={(v) => u("val_files", String(v).split(",").map((s) => s.trim()).filter(Boolean))} />
       </Section>
     </>
   );

@@ -1,3 +1,4 @@
+use crate::commands::utils::expand_tilde;
 use crate::models::job::{Job, JobStatus, LogLine, LogStream, SshAuth, SshParams};
 use chrono::Utc;
 use std::collections::HashMap;
@@ -25,6 +26,9 @@ pub async fn launch_local_job(
     let job_id = Uuid::new_v4().to_string();
     let python = python_cmd.unwrap_or_else(|| "python3".into());
     let name = experiment_name.unwrap_or_else(|| format!("job-{}", &job_id[..8]));
+
+    let working_dir = expand_tilde(&working_dir);
+    let config_path = expand_tilde(&config_path);
 
     let config_abs = if std::path::Path::new(&config_path).is_absolute() {
         config_path.clone()
@@ -57,10 +61,21 @@ pub async fn launch_local_job(
     let pid_store_clone = pid_store.inner().clone();
 
     tokio::spawn(async move {
+        // Hydra expects --config-path=<dir> and --config-name=<stem> (no extension)
+        let config_stem = std::path::Path::new(&config_abs)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("config")
+            .to_string();
+        let config_dir = std::path::Path::new(&config_abs)
+            .parent()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| working_dir.clone());
+
         let mut cmd = tokio::process::Command::new(&python);
         cmd.args(["-m", "verl.trainer.main_ppo"])
-            .arg(format!("--config-path={}", working_dir))
-            .arg(format!("--config-name={}", config_abs))
+            .arg(format!("--config-path={}", config_dir))
+            .arg(format!("--config-name={}", config_stem))
             .current_dir(&working_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

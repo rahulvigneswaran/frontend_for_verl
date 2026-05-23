@@ -1,8 +1,16 @@
+use crate::commands::utils::expand_tilde;
 use crate::models::verl_config::{ValidationError, ValidationSeverity, VerlConfig};
 use std::path::PathBuf;
 
 #[tauri::command]
+pub async fn parse_yaml_string(yaml: String) -> Result<VerlConfig, String> {
+    serde_yaml::from_str::<VerlConfig>(&yaml)
+        .map_err(|e| format!("Failed to parse YAML: {e}"))
+}
+
+#[tauri::command]
 pub async fn parse_yaml(path: String) -> Result<VerlConfig, String> {
+    let path = expand_tilde(&path);
     let content = tokio::fs::read_to_string(&path)
         .await
         .map_err(|e| format!("Failed to read file: {e}"))?;
@@ -21,16 +29,17 @@ pub async fn save_yaml(config: VerlConfig, path: String) -> Result<(), String> {
     let yaml =
         serde_yaml::to_string(&config).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
-    let path = PathBuf::from(&path);
+    let expanded = expand_tilde(&path);
+    let path = PathBuf::from(&expanded);
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .map_err(|e| format!("Failed to create directories: {e}"))?;
+            .map_err(|e| format!("Failed to create directories '{}': {e}", parent.display()))?;
     }
 
     tokio::fs::write(&path, yaml)
         .await
-        .map_err(|e| format!("Failed to write file: {e}"))
+        .map_err(|e| format!("Failed to write file '{}': {e}", path.display()))
 }
 
 #[tauri::command]
@@ -60,7 +69,7 @@ pub async fn validate_config(config: VerlConfig) -> Result<Vec<ValidationError>,
             errors.push(ValidationError {
                 field: "data.train_files".into(),
                 message: "At least one training file is required".into(),
-                severity: ValidationSeverity::Error,
+                severity: ValidationSeverity::Warning,
             });
         }
         if let Some(bs) = data.train_batch_size {

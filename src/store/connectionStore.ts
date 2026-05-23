@@ -26,6 +26,8 @@ interface ConnectionState {
   hfToken: string;
   pythonCmd: string;
   workingDir: string;
+  // passwords are kept in-memory only (not persisted)
+  sshPasswords: Record<string, string>;
 
   addSshProfile: (profile: SshProfile) => void;
   removeSshProfile: (id: string) => void;
@@ -35,26 +37,33 @@ interface ConnectionState {
   setHfToken: (token: string) => void;
   setPythonCmd: (cmd: string) => void;
   setWorkingDir: (dir: string) => void;
+  setSshPassword: (profileId: string, password: string) => void;
+  getSshPassword: (profileId: string) => string;
 }
 
 export const useConnectionStore = create<ConnectionState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       sshProfiles: [],
       activeSshProfileId: null,
       wandb: { apiKey: "", entity: "", defaultProject: "" },
       hfToken: "",
       pythonCmd: "python3",
       workingDir: "~/verl_runs",
+      sshPasswords: {},
 
       addSshProfile: (profile) =>
         set((s) => ({ sshProfiles: [...s.sshProfiles, profile] })),
 
       removeSshProfile: (id) =>
-        set((s) => ({
-          sshProfiles: s.sshProfiles.filter((p) => p.id !== id),
-          activeSshProfileId: s.activeSshProfileId === id ? null : s.activeSshProfileId,
-        })),
+        set((s) => {
+          const { [id]: _, ...rest } = s.sshPasswords;
+          return {
+            sshProfiles: s.sshProfiles.filter((p) => p.id !== id),
+            activeSshProfileId: s.activeSshProfileId === id ? null : s.activeSshProfileId,
+            sshPasswords: rest,
+          };
+        }),
 
       updateSshProfile: (id, update) =>
         set((s) => ({
@@ -66,7 +75,17 @@ export const useConnectionStore = create<ConnectionState>()(
       setHfToken: (token) => set({ hfToken: token }),
       setPythonCmd: (cmd) => set({ pythonCmd: cmd }),
       setWorkingDir: (dir) => set({ workingDir: dir }),
+      setSshPassword: (profileId, password) =>
+        set((s) => ({ sshPasswords: { ...s.sshPasswords, [profileId]: password } })),
+      getSshPassword: (profileId) => get().sshPasswords[profileId] ?? "",
     }),
-    { name: "verl-studio-connections" }
+    {
+      name: "verl-studio-connections",
+      // exclude sshPasswords from persistence
+      partialize: (state) => {
+        const { sshPasswords: _pw, getSshPassword: _get, setSshPassword: _set, ...rest } = state;
+        return rest;
+      },
+    }
   )
 );

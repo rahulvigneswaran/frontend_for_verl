@@ -11,6 +11,9 @@ import type {
 export const parseYaml = (path: string): Promise<VerlConfig> =>
   invoke("parse_yaml", { path });
 
+export const parseYamlString = (yaml: string): Promise<VerlConfig> =>
+  invoke("parse_yaml_string", { yaml });
+
 export const serializeYaml = (config: VerlConfig): Promise<string> =>
   invoke("serialize_yaml", { config });
 
@@ -108,6 +111,30 @@ export const listRemoteFiles = (
   remotePath: string
 ): Promise<{ name: string; path: string; is_dir: boolean; size: number }[]> =>
   invoke("list_remote_files", { connection, remotePath });
+
+export interface GpuInfo {
+  name: string;
+  vram_mb: number;
+}
+
+export interface HardwareInfo {
+  gpus: GpuInfo[];
+  gpu_count: number;
+  total_vram_mb: number;
+  error?: string;
+}
+
+export const detectLocalGpus = (): Promise<HardwareInfo> =>
+  invoke("detect_local_gpus");
+
+export const detectRemoteGpus = (connection: SshParams): Promise<HardwareInfo> =>
+  invoke("detect_remote_gpus", { connection });
+
+export const syncFlowConfig = (configYaml: string): Promise<void> =>
+  invoke("sync_flow_config", { configYaml });
+
+export const getMcpPort = (): Promise<number> =>
+  invoke("get_mcp_port");
 
 // Metrics commands
 export interface WandbRun {

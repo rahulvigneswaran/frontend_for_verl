@@ -28,7 +28,7 @@ const ALGO_OPTIONS = [
 export function Toolbar() {
   const { nodes, algorithm, setAlgorithm, setNodes, setEdges, resetFlow } = useFlowStore();
   const { addJob, setActiveJobId } = useJobStore();
-  const { pythonCmd, workingDir, sshProfiles, activeSshProfileId, setActiveSshProfile } = useConnectionStore();
+  const { pythonCmd, workingDir, sshProfiles, activeSshProfileId, setActiveSshProfile, getSshPassword } = useConnectionStore();
   const [launching, setLaunching] = useState(false);
   const [exportStatus, setExportStatus] = useState<"idle" | "ok" | "err">("idle");
   const [showSshMenu, setShowSshMenu] = useState(false);
@@ -99,12 +99,12 @@ export function Toolbar() {
   const handleRunLocally = async () => {
     setLaunching(true);
     try {
-      const effectiveDir = workingDir.replace(/^~/, (globalThis as Record<string, unknown>).HOME as string ?? "~");
-      const { configPath, expName } = await buildAndSaveConfig(effectiveDir);
+      // Tilde expansion is handled by the Rust backend via expand_tilde()
+      const { configPath, expName } = await buildAndSaveConfig(workingDir);
 
       const jobId = await launchLocalJob({
         configPath,
-        workingDir: effectiveDir,
+        workingDir,
         pythonCmd,
         experimentName: expName,
       });
@@ -114,7 +114,7 @@ export function Toolbar() {
         name: expName ?? `job-${jobId.slice(0, 8)}`,
         status: "pending",
         created_at: new Date().toISOString(),
-        working_dir: effectiveDir,
+        working_dir: workingDir,
         config_path: configPath,
         is_remote: false,
       });
@@ -146,7 +146,7 @@ export function Toolbar() {
         auth: profile.authType === "key"
           ? { type: "key", key_path: profile.keyPath ?? "" }
           : profile.authType === "password"
-          ? { type: "password", password: "" }
+          ? { type: "password", password: getSshPassword(profile.id) }
           : { type: "agent" },
         remoteWorkDir: profile.remoteWorkDir,
         pythonCmd: profile.pythonCmd,

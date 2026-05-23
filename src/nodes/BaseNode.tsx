@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { open } from "@tauri-apps/plugin-shell";
 import { cn } from "../lib/utils";
 import type { AnyNodeData, NodeType } from "../lib/types";
 import { useFlowStore } from "../store/flowStore";
@@ -39,6 +40,22 @@ const NODE_ICONS: Record<NodeType, string> = {
   logger: "📈",
   ray: "☁️",
   ssh: "🔗",
+};
+
+const VERL_DOCS: Partial<Record<NodeType, string>> = {
+  model: "https://verl.readthedocs.io/en/latest/workers/actor.html",
+  dataset: "https://verl.readthedocs.io/en/latest/preparation/prepare_data.html",
+  actor: "https://verl.readthedocs.io/en/latest/workers/actor.html",
+  rollout: "https://verl.readthedocs.io/en/latest/workers/rollout.html",
+  critic: "https://verl.readthedocs.io/en/latest/workers/critic.html",
+  rewardModel: "https://verl.readthedocs.io/en/latest/workers/reward_model.html",
+  customReward: "https://verl.readthedocs.io/en/latest/preparation/reward_function.html",
+  agent: "https://verl.readthedocs.io/en/latest/workers/agent.html",
+  algorithm: "https://verl.readthedocs.io/en/latest/algo/algo.html",
+  trainer: "https://verl.readthedocs.io/en/latest/trainer/trainer.html",
+  logger: "https://verl.readthedocs.io/en/latest/trainer/trainer.html#logging",
+  ray: "https://verl.readthedocs.io/en/latest/start/ray_tutorial.html",
+  ssh: "https://verl.readthedocs.io/en/latest/start/install.html",
 };
 
 // Fixed layout constants for deterministic handle positioning
@@ -113,6 +130,15 @@ export function BaseNode({ data, selected, id, children }: BaseNodeProps) {
         </span>
 
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+          {VERL_DOCS[data.nodeType] && (
+            <button
+              title="View verl documentation"
+              className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 text-xs"
+              onClick={(e) => { e.stopPropagation(); open(VERL_DOCS[data.nodeType]!); }}
+            >
+              ⓘ
+            </button>
+          )}
           <button
             title="Edit (or double-click)"
             className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-white/10 text-xs"

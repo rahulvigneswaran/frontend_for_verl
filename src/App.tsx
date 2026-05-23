@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, type DragEvent } from "react";
+import React, { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import {
   ReactFlow,
   Background,
@@ -17,6 +17,9 @@ import { RightPanel } from "./components/RightPanel";
 import { NodeEditModal } from "./panels/NodeEditModal";
 import { EDGE_DEFAULTS } from "./lib/edgeDefaults";
 import type { AnyNodeData, NodeType } from "./lib/types";
+import { listen } from "@tauri-apps/api/event";
+import { syncFlowConfig, serializeYaml } from "./lib/tauri";
+import { flowNodesToVerlConfig, verlConfigToFlowNodes } from "./lib/configConverter";
 
 const DEFAULT_NODE_DATA: Record<NodeType, () => Partial<AnyNodeData>> = {
   model: () => ({ label: "Model", nodeType: "model" as const, config: { path: "", dtype: "bfloat16", use_fused_kernels: false, enable_gradient_checkpointing: false } }),
@@ -83,9 +86,9 @@ function usePanelResize(initial: number) {
 
 export default function App() {
   const {
-    nodes, edges,
+    nodes, edges, algorithm,
     onNodesChange, onEdgesChange, onConnect,
-    addNode, setSelectedNodeId,
+    addNode, setNodes, setEdges, setSelectedNodeId,
   } = useFlowStore();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -94,6 +97,38 @@ export default function App() {
     getViewport: () => { x: number; y: number; zoom: number };
   } | null>(null);
   const [modalNodeId, setModalNodeId] = useState<string | null>(null);
+
+  // Sync flow config to MCP server (debounced)
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      try {
+        const config = flowNodesToVerlConfig(nodes as Node<AnyNodeData>[], algorithm);
+        const yaml = await serializeYaml(config);
+        await syncFlowConfig(yaml);
+      } catch {
+        // non-fatal: MCP sync is best-effort
+      }
+    }, 800);
+    return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
+  }, [nodes, algorithm]);
+
+  // Listen for MCP set_config events (Claude desktop pushing a new config)
+  useEffect(() => {
+    const unlistenPromise = listen<string>("mcp:set_config", async (event) => {
+      try {
+        const { parseYamlString } = await import("./lib/tauri");
+        const config = await parseYamlString(event.payload);
+        const importedNodes = verlConfigToFlowNodes(config, algorithm);
+        setNodes(importedNodes as Node<AnyNodeData>[]);
+        setEdges([]);
+      } catch {
+        // best-effort
+      }
+    });
+    return () => { unlistenPromise.then((unlisten) => unlisten()); };
+  }, [algorithm, setNodes, setEdges]);
 
   const left = usePanelResize(224);
   const right = usePanelResize(288);

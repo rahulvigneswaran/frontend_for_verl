@@ -18,6 +18,44 @@ pub struct RemoteFile {
     pub size: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GpuInfo {
+    pub name: String,
+    pub vram_mb: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareInfo {
+    pub gpus: Vec<GpuInfo>,
+    pub gpu_count: usize,
+    pub total_vram_mb: u64,
+    pub error: Option<String>,
+}
+
+fn parse_gpu_info(output: &str) -> HardwareInfo {
+    let mut gpus = Vec::new();
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(2, ',');
+        let name = parts.next().unwrap_or("").trim().to_string();
+        let vram_mb: u64 = parts.next().unwrap_or("0").trim().parse().unwrap_or(0);
+        if !name.is_empty() && !name.contains("NVIDIA-SMI") && !name.contains("failed") {
+            gpus.push(GpuInfo { name, vram_mb });
+        }
+    }
+    let total = gpus.iter().map(|g| g.vram_mb).sum();
+    let count = gpus.len();
+    HardwareInfo {
+        gpus,
+        gpu_count: count,
+        total_vram_mb: total,
+        error: None,
+    }
+}
+
 pub fn connect_session(params: &SshParams) -> Result<ssh2::Session, String> {
     let addr = format!("{}:{}", params.host, params.port);
     let tcp = TcpStream::connect(&addr)
@@ -29,11 +67,20 @@ pub fn connect_session(params: &SshParams) -> Result<ssh2::Session, String> {
 
     match &params.auth {
         crate::models::job::SshAuth::Password { password } => {
+            if password.is_empty() {
+                return Err("Password auth requires a non-empty password. Set it in Settings → SSH.".into());
+            }
             sess.userauth_password(&params.username, password)
                 .map_err(|e| format!("Password auth failed: {e}"))?;
         }
         crate::models::job::SshAuth::Key { key_path, passphrase } => {
+            if key_path.is_empty() {
+                return Err("Key auth requires a key file path. Set it in Settings → SSH.".into());
+            }
             let key = std::path::Path::new(key_path);
+            if !key.exists() {
+                return Err(format!("Key file not found: {}", key_path));
+            }
             sess.userauth_pubkey_file(
                 &params.username,
                 None,
@@ -52,7 +99,7 @@ pub fn connect_session(params: &SshParams) -> Result<ssh2::Session, String> {
                 }
             }
             if !sess.authenticated() {
-                return Err("SSH agent authentication failed".into());
+                return Err("SSH agent authentication failed — ensure ssh-agent is running with your key loaded (ssh-add ~/.ssh/id_rsa)".into());
             }
         }
     }
@@ -68,7 +115,7 @@ pub async fn test_ssh(connection: SshParams) -> Result<ConnectionResult, String>
                 let banner = sess.banner().map(|s| s.to_string());
                 Ok(ConnectionResult {
                     success: true,
-                    message: "Connection successful".into(),
+                    message: format!("Connected to {}@{}", connection.username, connection.host),
                     server_banner: banner,
                 })
             }
@@ -78,6 +125,75 @@ pub async fn test_ssh(connection: SshParams) -> Result<ConnectionResult, String>
                 server_banner: None,
             }),
         }
+    })
+    .await
+    .map_err(|e| format!("Task error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn detect_local_gpus() -> Result<HardwareInfo, String> {
+    tokio::task::spawn_blocking(move || {
+        let output = std::process::Command::new("nvidia-smi")
+            .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
+            .output();
+
+        match output {
+            Ok(o) if o.status.success() => {
+                let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+                Ok(parse_gpu_info(&stdout))
+            }
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                Ok(HardwareInfo {
+                    gpus: vec![],
+                    gpu_count: 0,
+                    total_vram_mb: 0,
+                    error: Some(if stderr.is_empty() {
+                        "nvidia-smi returned an error (no NVIDIA GPU found?)".into()
+                    } else {
+                        stderr
+                    }),
+                })
+            }
+            Err(e) => Ok(HardwareInfo {
+                gpus: vec![],
+                gpu_count: 0,
+                total_vram_mb: 0,
+                error: Some(format!("nvidia-smi not found — install NVIDIA drivers: {e}")),
+            }),
+        }
+    })
+    .await
+    .map_err(|e| format!("Task error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn detect_remote_gpus(connection: SshParams) -> Result<HardwareInfo, String> {
+    tokio::task::spawn_blocking(move || {
+        let sess = connect_session(&connection)?;
+        let mut channel = sess
+            .channel_session()
+            .map_err(|e| format!("Channel open failed: {e}"))?;
+
+        channel
+            .exec("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>&1")
+            .map_err(|e| format!("Exec failed: {e}"))?;
+
+        let mut stdout = String::new();
+        channel.read_to_string(&mut stdout).ok();
+        channel.wait_close().ok();
+        let exit_code = channel.exit_status().unwrap_or(-1);
+
+        if exit_code != 0 {
+            return Ok(HardwareInfo {
+                gpus: vec![],
+                gpu_count: 0,
+                total_vram_mb: 0,
+                error: Some(stdout.trim().to_string()),
+            });
+        }
+
+        Ok(parse_gpu_info(&stdout))
     })
     .await
     .map_err(|e| format!("Task error: {e}"))?
@@ -121,7 +237,8 @@ pub async fn exec_remote(
 ) -> Result<(String, String, i32), String> {
     tokio::task::spawn_blocking(move || {
         let sess = connect_session(&connection)?;
-        let mut channel = sess.channel_session()
+        let mut channel = sess
+            .channel_session()
             .map_err(|e| format!("Channel open failed: {e}"))?;
 
         channel.exec(&command).map_err(|e| format!("Exec failed: {e}"))?;

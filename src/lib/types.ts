@@ -13,8 +13,13 @@ export interface VerlConfig {
 }
 
 export interface DataConfig {
+  source?: "local" | "huggingface";
   train_files?: string[];
   val_files?: string[];
+  hf_dataset?: string;
+  hf_subset?: string;
+  hf_train_split?: string;
+  hf_val_split?: string;
   train_batch_size?: number;
   val_batch_size?: number;
   max_prompt_length?: number;

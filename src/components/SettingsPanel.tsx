@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useConnectionStore, type SshProfile } from "../store/connectionStore";
 import { cn } from "../lib/utils";
+import { testSsh, detectLocalGpus, detectRemoteGpus, type HardwareInfo, type SshParams } from "../lib/tauri";
 
 type SettingsTab = "general" | "wandb" | "hf" | "ssh";
 
@@ -63,6 +64,9 @@ function GeneralSettings() {
             hint="Where YAML configs and checkpoints are saved by default"
           />
         </div>
+      </div>
+      <div className="border-t border-border pt-3">
+        <GeneralGpuSection />
       </div>
     </div>
   );
@@ -139,29 +143,137 @@ const EMPTY_PROFILE: Omit<SshProfile, "id"> = {
   pythonCmd: "python3",
 };
 
+function GpuInfoDisplay({ info }: { info: HardwareInfo }) {
+  if (info.error) {
+    return <p className="text-[10px] text-red-400">{info.error}</p>;
+  }
+  if (info.gpu_count === 0) {
+    return <p className="text-[10px] text-muted-foreground">No GPUs detected</p>;
+  }
+  return (
+    <div className="space-y-1">
+      {info.gpus.map((g, i) => (
+        <div key={i} className="flex items-center justify-between text-[10px]">
+          <span className="text-foreground truncate mr-2">{g.name}</span>
+          <span className="text-muted-foreground shrink-0">{(g.vram_mb / 1024).toFixed(0)} GB</span>
+        </div>
+      ))}
+      <div className="text-[10px] text-primary font-medium pt-1 border-t border-border">
+        {info.gpu_count}× GPU · {(info.total_vram_mb / 1024).toFixed(0)} GB total
+      </div>
+    </div>
+  );
+}
+
+function GeneralGpuSection() {
+  const [gpuInfo, setGpuInfo] = useState<HardwareInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const detect = async () => {
+    setLoading(true);
+    try {
+      const info = await detectLocalGpus();
+      setGpuInfo(info);
+    } catch (e) {
+      setGpuInfo({ gpus: [], gpu_count: 0, total_vram_mb: 0, error: String(e) });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-foreground">Local Hardware</h3>
+        <button
+          onClick={detect}
+          disabled={loading}
+          className="text-xs px-2 py-1 bg-secondary hover:bg-secondary/80 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          {loading ? "Detecting…" : "Detect GPUs"}
+        </button>
+      </div>
+      {gpuInfo && <GpuInfoDisplay info={gpuInfo} />}
+    </div>
+  );
+}
+
 function SshSettings() {
-  const { sshProfiles, activeSshProfileId, addSshProfile, removeSshProfile, updateSshProfile, setActiveSshProfile } = useConnectionStore();
+  const { sshProfiles, activeSshProfileId, addSshProfile, removeSshProfile, updateSshProfile, setActiveSshProfile, setSshPassword, getSshPassword } = useConnectionStore();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Omit<SshProfile, "id">>(EMPTY_PROFILE);
+  const [draftPassword, setDraftPassword] = useState("");
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [gpuInfo, setGpuInfo] = useState<HardwareInfo | null>(null);
+  const [detectingGpus, setDetectingGpus] = useState(false);
 
   const openNew = () => {
     setDraft(EMPTY_PROFILE);
+    setDraftPassword("");
+    setTestResult(null);
+    setGpuInfo(null);
     setEditing("new");
   };
 
   const openEdit = (p: SshProfile) => {
     setDraft({ name: p.name, host: p.host, port: p.port, username: p.username, authType: p.authType, keyPath: p.keyPath ?? "", remoteWorkDir: p.remoteWorkDir, pythonCmd: p.pythonCmd });
+    setDraftPassword(getSshPassword(p.id));
+    setTestResult(null);
+    setGpuInfo(null);
     setEditing(p.id);
   };
 
   const save = () => {
     if (!draft.host || !draft.username) return;
     if (editing === "new") {
-      addSshProfile({ ...draft, id: `ssh-${Date.now()}` });
+      const id = `ssh-${Date.now()}`;
+      addSshProfile({ ...draft, id });
+      if (draft.authType === "password") setSshPassword(id, draftPassword);
     } else if (editing) {
       updateSshProfile(editing, draft);
+      if (draft.authType === "password") setSshPassword(editing, draftPassword);
     }
     setEditing(null);
+  };
+
+  const buildTestParams = (): SshParams => ({
+    host: draft.host,
+    port: draft.port,
+    username: draft.username,
+    auth: draft.authType === "key"
+      ? { type: "key", key_path: draft.keyPath ?? "" }
+      : draft.authType === "password"
+      ? { type: "password", password: draftPassword }
+      : { type: "agent" },
+    remoteWorkDir: draft.remoteWorkDir,
+    pythonCmd: draft.pythonCmd,
+  });
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testSsh(buildTestParams());
+      setTestResult(result);
+    } catch (e) {
+      setTestResult({ success: false, message: String(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleDetectGpus = async () => {
+    setDetectingGpus(true);
+    setGpuInfo(null);
+    try {
+      const info = await detectRemoteGpus(buildTestParams());
+      setGpuInfo(info);
+    } catch (e) {
+      setGpuInfo({ gpus: [], gpu_count: 0, total_vram_mb: 0, error: String(e) });
+    } finally {
+      setDetectingGpus(false);
+    }
   };
 
   if (editing !== null) {
@@ -201,9 +313,41 @@ function SshSettings() {
         {draft.authType === "key" && (
           <InputField label="Key path" value={draft.keyPath ?? ""} onChange={(v) => setDraft((d) => ({ ...d, keyPath: v }))} placeholder="~/.ssh/id_rsa" />
         )}
+        {draft.authType === "password" && (
+          <InputField label="Password" value={draftPassword} onChange={setDraftPassword} type="password" placeholder="SSH password" hint="Stored in memory only, never persisted to disk" />
+        )}
 
         <InputField label="Remote work dir" value={draft.remoteWorkDir} onChange={(v) => setDraft((d) => ({ ...d, remoteWorkDir: v }))} placeholder="~/verl_runs" />
         <InputField label="Python command" value={draft.pythonCmd} onChange={(v) => setDraft((d) => ({ ...d, pythonCmd: v }))} placeholder="python3" />
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleTest}
+            disabled={testing || !draft.host || !draft.username}
+            className="flex-1 py-1.5 bg-secondary hover:bg-secondary/80 rounded text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+          >
+            {testing ? "Testing…" : "Test Connection"}
+          </button>
+          <button
+            onClick={handleDetectGpus}
+            disabled={detectingGpus || !draft.host || !draft.username}
+            className="flex-1 py-1.5 bg-secondary hover:bg-secondary/80 rounded text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+          >
+            {detectingGpus ? "Detecting…" : "Detect GPUs"}
+          </button>
+        </div>
+
+        {testResult && (
+          <div className={cn("rounded px-2.5 py-2 text-[10px]", testResult.success ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>
+            {testResult.success ? "✓ " : "✗ "}{testResult.message}
+          </div>
+        )}
+
+        {gpuInfo && (
+          <div className="bg-secondary/50 rounded px-2.5 py-2">
+            <GpuInfoDisplay info={gpuInfo} />
+          </div>
+        )}
 
         <button
           onClick={save}
@@ -244,7 +388,7 @@ function SshSettings() {
               <span className="text-base">🔗</span>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-medium text-foreground truncate">{p.name || p.host}</div>
-                <div className="text-[10px] text-muted-foreground">{p.username}@{p.host}:{p.port}</div>
+                <div className="text-[10px] text-muted-foreground">{p.username}@{p.host}:{p.port} · {p.authType}</div>
               </div>
               {activeSshProfileId === p.id && (
                 <span className="text-[10px] text-primary font-medium shrink-0">active</span>
